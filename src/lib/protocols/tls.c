@@ -2214,6 +2214,83 @@ static void ndpi_compute_ja4(struct ndpi_detection_module_struct *ndpi_struct,
 		     (ja->client.alpn[1] == '\0') ? '0' : ja->client.alpn[1]);
   if((rc > 0) && (ja_str_len + rc < JA_STR_LEN)) ja_str_len += rc;
 
+// ----------------------------------------------------------------------------
+
+  tmp_str_len = 0;
+  for(i=0; i<ja->client.num_ciphers; i++) {
+#ifdef JA4R_DECIMAL
+    rc = snprintf(&ja4_r[ja4_r_len], sizeof(ja4_r)-ja4_r_len, "%s%u", (i > 0) ? "," : "", ja->client.cipher[i]);
+    if(rc > 0) ja4_r_len += rc;
+#endif
+    rc = ndpi_snprintf((char *)&tmp_str[tmp_str_len], JA_STR_LEN-tmp_str_len, "%s%04x",
+		       (i > 0) ? "," : "", ja->client.cipher[i]);
+    if((rc > 0) && (tmp_str_len + rc < JA_STR_LEN)) tmp_str_len += rc; else break;
+  }
+
+#ifndef JA4R_DECIMAL
+  ja_str[ja_str_len] = 0;
+  i = snprintf(&ja4_r[ja4_r_len], sizeof(ja4_r)-ja4_r_len, "%s", ja_str); if(i > 0) ja4_r_len += i;
+
+  tmp_str[tmp_str_len] = 0;
+  i = snprintf(&ja4_r[ja4_r_len], sizeof(ja4_r)-ja4_r_len, "%s_", tmp_str); if(i > 0) ja4_r_len += i;
+#endif
+
+#ifdef DEBUG_JA
+  printf("[CIPHER] %s [len: %u]\n", tmp_str, tmp_str_len);
+#endif
+
+#ifdef JA4R_DECIMAL
+  rc = snprintf(&ja4_r[ja4_r_len], sizeof(ja4_r)-ja4_r_len, "_");
+  if(rc > 0) ja4_r_len += rc;
+#endif
+
+  tmp_str_len = 0;
+  for(i=0, num_extn = 0; i<ja->client.num_tls_extensions; i++) {
+    if((ja->client.tls_extension[i] > 0) && (ja->client.tls_extension[i] != 0x10 /* ALPN extension */)) {
+#ifdef JA4R_DECIMAL
+      rc = snprintf(&ja4_r[ja4_r_len], sizeof(ja4_r)-ja4_r_len, "%s%u", (num_extn > 0) ? "," : "", ja->client.tls_extension[i]);
+      if((rc > 0) && (ja4_r_len + rc < JA_STR_LEN)) ja4_r_len += rc; else break;
+#endif
+
+      rc = ndpi_snprintf((char *)&tmp_str[tmp_str_len], JA_STR_LEN-tmp_str_len, "%s%04x",
+			 (num_extn > 0) ? "," : "", ja->client.tls_extension[i]);
+      if((rc > 0) && (tmp_str_len + rc < JA_STR_LEN)) tmp_str_len += rc; else break;
+      num_extn++;
+    }
+  }
+
+  for(i=0; i<ja->client.num_signature_algorithms; i++) {
+    rc = ndpi_snprintf((char *)&tmp_str[tmp_str_len], JA_STR_LEN-tmp_str_len, "%s%04x",
+		       (i > 0) ? "," : "_", ja->client.signature_algorithms[i]);
+    if((rc > 0) && (tmp_str_len + rc < JA_STR_LEN)) tmp_str_len += rc; else break;
+  }
+
+#ifdef DEBUG_JA
+  printf("[EXTN] %s [len: %u]\n", tmp_str, tmp_str_len);
+#endif
+
+  tmp_str[tmp_str_len] = 0;
+
+#ifndef JA4R_DECIMAL
+  i = snprintf(&ja4_r[ja4_r_len], sizeof(ja4_r)-ja4_r_len, "%s", tmp_str); if(i > 0) ja4_r_len += i;
+#endif
+
+  if(ndpi_struct->cfg.tls_ja4ru_fingerprint_enabled) {
+    if(flow->protos.tls_quic.ja4_client_raw_unsorted == NULL)
+      flow->protos.tls_quic.ja4_client_raw_unsorted = ndpi_strdup(ja4_r);
+
+#ifdef DEBUG_JA
+    printf("[JA4_ru] %s [len: %u]\n", ja4_r, ja4_r_len);
+#endif
+  }
+
+  ja4_r_len = 0;
+  ja4_r[ja4_r_len] = 0;
+  tmp_str_len = 0;
+  tmp_str[tmp_str_len] = 0;
+
+// ----------------------------------------------------------------------------
+
   /* Sort ciphers and extensions */
   qsort(&ja->client.cipher, ja->client.num_ciphers, sizeof(u_int16_t), u_int16_t_cmpfunc);
   qsort(&ja->client.tls_extension, ja->client.num_tls_extensions, sizeof(u_int16_t), u_int16_t_cmpfunc);
